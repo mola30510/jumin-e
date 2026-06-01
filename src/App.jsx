@@ -173,11 +173,11 @@ export default function App() {
   const finalPrice = price - discountedAmount;
 
   const styles = {
-    root: { position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', margin: 0, padding: 0, overflow: 'hidden', display: 'flex', fontFamily: 'sans-serif' },
+    root: { position: 'flex', display: 'flex', flexDirection: 'column', height: '100vh', width: '100vw', margin: 0, padding: 0 },
     leftSection: { width: '50%', height: '100%', display: 'flex', flexDirection: 'column' },
-    mapArea: { width: '100%', height: '60%', minHeight: '400px', backgroundColor: '#e6f0fa', position: 'relative', overflow: 'hidden'},
-    dashboardArea: { width: '100%', height: '40%', backgroundColor: '#f8fafc', display: 'flex', flexDirection: 'column', padding: '20px', boxSizing: 'border-box', borderTop: '2px solid #e2e8f0' },
-    rightSection: { width: '50%', height: '100%', display: 'flex', flexDirection: 'column', borderLeft: '2px solid #e2e8f0' },
+    mapArea: { width: '100%', height: '50%', backgroundColor: '#e6f0fa'},
+    dashboardArea: { width: '100%', height: '50%', backgroundColor: '#ffffff', overflowY: 'auto', padding: '20px' },
+    rightSection: { width: '100%', height: '100vh', display: 'flex', flexDirection: 'column', borderLeft: '1px solid #e2e8f0' },
     chatLog: { width: '100%', height: '85%', backgroundColor: '#f1f5f9', padding: '20px', boxSizing: 'border-box', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '10px' },
     bubble: (isUser) => ({
       backgroundColor: isUser ? '#0284c7' : '#ffffff',
