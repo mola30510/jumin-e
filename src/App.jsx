@@ -20,29 +20,40 @@ export default function App() {
 
   // 카카오 지도 최초 초기화 및 데이터 누락 확인 
   useEffect(() => {
-    const initMap = () => {
-      if (window.kakao && window.kakao.maps && mapContainerRef.current) {
-        const options = { 
-          center: new window.kakao.maps.LatLng(37.5665, 126.9780), 
-          level: 8 
-        };
-        mapRef.current = new window.kakao.maps.Map(mapContainerRef.current, options);
-        console.log("지도 초기화 완료");
-      }
+    console.log("useEffect 실행됨, 스크립트 로드 시작...");
+    // 1. 카카오 지도 로드 로직
+    const loadKakaoMap = () => {
+      const script = document.createElement("script");
+      // VITE_KAKAO_APP_KEY 환경변수 설정 
+      script.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${import.meta.env.VITE_KAKAO_APP_KEY}&autoload=false`;
+      script.async = true;
+      
+      script.onload = () => {
+        console.log("카카오 스크립트 로드 성공!");
+        window.kakao.maps.load(() => {
+          try {
+            const container = mapContainerRef.current;
+            if (!container) {
+              console.error("지도 컨테이너를 찾을 수 없습니다.");
+              return;
+            }
+            const options = {
+              center: new window.kakao.maps.LatLng(37.5665, 126.9780),
+              level: 8,
+            };
+            mapRef.current = new window.kakao.maps.Map(container, options);
+            console.log("지도 초기화 완료!");
+          } catch (e) {
+            console.error("지도 생성 중 에러 발생:", e);
+          }
+        });
+      };
+      document.head.appendChild(script);
     };
 
-    // 카카오맵이 이미 로드되어 있다면 바로 실행
-    if (window.kakao && window.kakao.maps) {
-      initMap();
-    } else {
-      // 아니면 스크립트 로딩 완료를 기다림
-      const script = document.querySelector('script[src*="dapi.kakao.com"]');
-      if (script) {
-        script.onload = initMap;
-      }
-    }
+    loadKakaoMap();
 
-    // 데이터 누락 확인 (지도 로딩과 무관하게 실행됨)
+    // 2. 데이터 누락 확인 로직 (기존 기능 유지)
     const regionNames = regionData.map(r => r.시군구명);
     const benefitKeys = Object.keys(benefitData);
     regionNames.forEach(name => {
@@ -67,9 +78,20 @@ export default function App() {
     const userMessage = { id: Date.now(), text: inputText, isUser: true };
     setMessages(prev => [...prev, userMessage]);
     const currentInput = inputText;
+
+    console.log("검색어:", currentInput);
+    console.log("전체 지역 데이터:", regionData.map(r => r.시군구명));
+    
     setInputText("");
 
-    const found = regionData.find(item => currentInput.includes(item.시군구명) || item.시군구명.includes(currentInput));
+    // regionData에 있는 모든 지역명 중, 현재 입력값에 포함된 첫 번째 지역을 찾음
+    const found = regionData.find(item => {
+      // 1. 지역명에서 '시', '군', '구'를 뺀 순수 이름 추출 (예: "곡성군" -> "곡성")
+      const shortName = item.시군구명.replace(/[시군구]$/, "");
+      
+      // 2. 사용자가 입력한 문장에 이 이름이 포함되어 있는지 확인
+      return currentInput.includes(shortName);
+    });
 
     if (found) {
       setPlaceName(found.시군구명);
