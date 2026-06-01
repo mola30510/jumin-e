@@ -78,7 +78,7 @@ export default function App() {
     if (found) {
       setPlaceName(found.시군구명);
       const url = `https://apis.data.go.kr/B551011/KorService2/areaBasedList2?serviceKey=${SERVICE_KEY}&numOfRows=5&pageNo=1&MobileOS=ETC&MobileApp=AppTest&_type=json&contentTypeId=12&lDongRegnCd=${found.시도코드}&lDongSignguCd=${found.시군구코드}`;
-      
+    
       try {
         const res = await fetch(url);
         const data = await res.json();
@@ -98,8 +98,8 @@ export default function App() {
 
           setCurrentBenefits(apiBenefits);
           setViewMode('info');
-          moveMapTo(lat, lng);
-          displayAreaInfo(apiBenefits, lat, lng);
+          moveMapTo(parseFloat(itemList[0].mapy), parseFloat(itemList[0].mapx));
+          displayAreaInfo(apiBenefits, parseFloat(itemList[0].mapy), parseFloat(itemList[0].mapx));
           setMessages(prev => [...prev, { id: Date.now(), text: `🤖 '${found.시군구명}'의 관광지 정보를 불러왔습니다.`, isUser: false }]);
         }
       } catch (err) {
@@ -111,38 +111,65 @@ export default function App() {
   };
 
   const styles = {
-    root: { display: 'flex', height: '100vh', width: '100vw' },
-    left: { width: '60%', display: 'flex', flexDirection: 'column' },
-    right: { width: '40%', display: 'flex', flexDirection: 'column', borderLeft: '1px solid #ccc' },
-    map: { flex: 1 },
-    dashboard: { height: '40%', padding: '20px', overflowY: 'auto', backgroundColor: '#f9f9f9' },
-    cardContainer: { display: 'flex', gap: '10px', overflowX: 'auto', marginTop: '10px' }
+    root: { display: 'flex', height: '100vh', width: '100vw', margin: 0, padding: 0 },
+    // 왼쪽 영역 (지도 50% + 업체 정보 50%)
+    leftSection: { width: '70%', height: '100%', display: 'flex', flexDirection: 'column' },
+    mapArea: { width: '100%', height: '50%', backgroundColor: '#e6f0fa' },
+    dashboardArea: { width: '100%', height: '50%', padding: '20px', overflowY: 'auto', backgroundColor: '#fff' },
+    // 오른쪽 채팅 영역 (30%)
+    rightSection: { width: '30%', height: '100%', display: 'flex', flexDirection: 'column', borderLeft: '1px solid #ddd' },
+    chatLog: { flex: 1, overflowY: 'auto', padding: '20px', backgroundColor: '#f1f5f9' },
+    // 업체 카드 스타일
+    cardContainer: { display: 'flex', gap: '15px', overflowX: 'auto', padding: '10px 0' },
+    card: { minWidth: '200px', border: '1px solid #ddd', borderRadius: '10px', padding: '10px', textAlign: 'center' },
+    inputRow: { padding: '10px', borderTop: '1px solid #ddd' }
   };
 
   return (
     <div style={styles.root}>
-      <div style={styles.left}>
-        <div ref={mapContainerRef} style={styles.map}></div>
-        <div style={styles.dashboard}>
-          {viewMode === 'calculator' ? <h3>계산기 모드</h3> : 
-            <div style={styles.cardContainer}>
-              {currentBenefits.map((b, i) => (
-                <div key={i} style={{ minWidth: '150px', border: '1px solid #ddd', padding: '10px' }}>
-                  <img src={b.imageUrl || 'https://via.placeholder.com/150'} style={{ width: '100%', height: '80px' }} />
-                  <p><strong>{b.업체명}</strong></p>
-                </div>
-              ))}
+      <div style={styles.leftSection}>
+        <div ref={mapContainerRef} style={styles.mapArea}></div>
+        <div style={styles.dashboardArea}>
+          {viewMode === 'info' ? (
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <h3>{placeName} 주요 혜택 업체</h3>
+                <button onClick={() => setViewMode('course')}>코스 추천 보기</button>
+              </div>
+              <div style={styles.cardContainer}>
+                {currentBenefits.map((b, i) => (
+                  <div key={i} style={styles.card}>
+                    <img src={b.imageUrl || 'https://via.placeholder.com/150'} style={{ width: '100%', height: '100px', borderRadius: '8px', objectFit: 'cover' }} />
+                    <p style={{ fontWeight: 'bold', margin: '10px 0 5px' }}>{b.업체명}</p>
+                    <p style={{ fontSize: '12px', color: '#666' }}>{b.상세설명}</p>
+                  </div>
+                ))}
+              </div>
             </div>
-          }
+          ) : (
+            <div>
+              <h3>{placeName} 추천 여행 코스</h3>
+              <p style={{ fontSize: '14px', lineHeight: '1.6' }}>
+                1. {currentBenefits[0]?.업체명}에서 시작하세요.<br/>
+                2. {currentBenefits[1]?.업체명}에서 식사하세요.<br/>
+                3. {currentBenefits[2]?.업체명}에서 여유를 즐기세요.<br/>
+                4. {currentBenefits[3]?.업체명}과 {currentBenefits[4]?.업체명}을 방문하세요.
+              </p>
+              <button onClick={() => setViewMode('info')}>업체 목록 보기</button>
+            </div>
+          )}
         </div>
       </div>
-      <div style={styles.right}>
-        <div style={{ flex: 1, overflowY: 'auto', padding: '20px' }}>
-          {messages.map(m => <div key={m.id}>{m.text}</div>)}
+      <div style={styles.rightSection}>
+        <div style={styles.chatLog}>
+          {messages.map(m => <div key={m.id} style={{marginBottom: '10px'}}>{m.text}</div>)}
         </div>
-        <input value={inputText} onChange={e => setInputText(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSend()} />
-        <button onClick={handleSend}>전송</button>
+        <div style={styles.inputRow}>
+          <input style={{flex: 1}} value={inputText} onChange={e => setInputText(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSend()} />
+          <button onClick={handleSend}>전송</button>
+        </div>
       </div>
     </div>
   );
 }
+  
