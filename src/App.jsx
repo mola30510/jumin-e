@@ -5,55 +5,45 @@ import benefitData from './data/benefitData.json';
 export default function App() {
   const mapContainerRef = useRef(null);
   const mapRef = useRef(null);
-  const markerRef = useRef(null);
-
   const [messages, setMessages] = useState([
     { id: 1, text: "안녕하세요! 주민증 할인 정보가 궁금해요.", isUser: true },
     { id: 2, text: "어느 지역 상권을 찾고 계신가요?", isUser: false }
   ]);
   const [inputText, setInputText] = useState("");
-  
   const [placeName, setPlaceName] = useState("선택된 지역 없음");
   const [price, setPrice] = useState(30000);
   const [discountRate, setDiscountRate] = useState(10);
+  const [viewMode, setViewMode] = useState('calculator'); // 'calculator' | 'info'
+  const [currentBenefits, setCurrentBenefits] = useState([]);
+
+  // 지도 요소 관리
+  const [markers, setMarkers] = useState([]);
+  const [currentCircle, setCurrentCircle] = useState(null);
+
   const SERVICE_KEY = import.meta.env.VITE_SERVICE_KEY;
 
   // 카카오 지도 최초 초기화 및 데이터 누락 확인 
   useEffect(() => {
-    console.log("useEffect 실행됨, 스크립트 로드 시작...");
     // 1. 카카오 지도 로드 로직
     const loadKakaoMap = () => {
       const script = document.createElement("script");
       // VITE_KAKAO_APP_KEY 환경변수 설정 
       script.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${import.meta.env.VITE_KAKAO_APP_KEY}&autoload=false`;
       script.async = true;
-      
       script.onload = () => {
-        console.log("카카오 스크립트 로드 성공!");
         window.kakao.maps.load(() => {
-          try {
-            const container = mapContainerRef.current;
-            if (!container) {
-              console.error("지도 컨테이너를 찾을 수 없습니다.");
-              return;
-            }
-            const options = {
-              center: new window.kakao.maps.LatLng(37.5665, 126.9780),
-              level: 8,
-            };
-            mapRef.current = new window.kakao.maps.Map(container, options);
-            console.log("지도 초기화 완료!");
-          } catch (e) {
-            console.error("지도 생성 중 에러 발생:", e);
-          }
+          const container = mapContainerRef.current;
+          if (!container) return;
+          const options = {
+            center: new window.kakao.maps.LatLng(37.5665, 126.9780),
+            level: 8,
+          };
+          mapRef.current = new window.kakao.maps.Map(container, options);
         });
       };
       document.head.appendChild(script);
     };
-
-    loadKakaoMap();
-
-    // 2. 데이터 누락 확인 로직 (기존 기능 유지)
+    // 2. 데이터 누락 확인 로직 
     const regionNames = regionData.map(r => r.시군구명);
     const benefitKeys = Object.keys(benefitData);
     regionNames.forEach(name => {
@@ -61,27 +51,65 @@ export default function App() {
         console.warn(`[주의] 혜택 데이터에 누락된 지역: ${name}`);
       }
     });
+    loadKakaoMap();
   }, []);
 
+  // 지도 이동 및 기존 요소 삭제
   const moveMapTo = (lat, lng) => {
     if (!mapRef.current) return;
-    const moveLatLon = new window.kakao.maps.LatLng(lat, lng);
-    mapRef.current.panTo(moveLatLon);
-    if (markerRef.current) markerRef.current.setMap(null);
-    const newMarker = new window.kakao.maps.Marker({ position: moveLatLon });
-    newMarker.setMap(mapRef.current);
-    markerRef.current = newMarker;
+    markers.forEach(m => m.setMap(null));
+    setMarkers([]);
+    if (currentCircle) {
+      currentCircle.setMap(null);
+      setCurrentCircle(null);
+    }
+    mapRef.current.panTo(new window.kakao.maps.LatLng(lat, lng));
   };
+  // 업체 마커 5개 찍고 영역 색칠
+  const displayAreaInfo = (benefits, lat, lng) => {
+    if (!mapRef.current) return;
 
+    // 1. 기존 마커 지우기
+    markers.forEach(m => m.setMap(null));
+    if (currentCircle) currentCircle.setMap(null);
+    
+    // 2. 5개의 지점에 파란색 핑 찍기
+    const newMarkers = [];
+    const bounds = new window.kakao.maps.LatLngBounds();
+    // 업체별 좌표 분산 처리 (중심점 기준)
+    if (benefits && benefits.length > 0) {
+      benefits.forEach((b, index) => {
+        const latOffset = (Math.random() - 0.5) * 0.01;
+        const lngOffset = (Math.random() - 0.5) * 0.01;
+        const markerPosition = new window.kakao.maps.LatLng(lat + latOffset, lng + lngOffset);
+        const marker = new window.kakao.maps.Marker({ position: markerPosition });
+        marker.setMap(mapRef.current);
+        newMarkers.push(marker);
+        bounds.extend(markerPosition);
+      });
+    }
+
+    // 3. 지도를 마커들이 다 보이게 축소
+    setMarkers(newMarkers);
+    mapRef.current.setBounds(bounds);
+
+    // 4. 영역 표시 
+    const circle = new window.kakao.maps.Circle({
+      center: new window.kakao.maps.LatLng(lat, lng),
+      radius: 1500,
+      strokeWeight: 2,
+      strokeColor: '#FF0000',
+      fillColor: '#FF0000',
+      fillOpacity: 0.2
+    });
+    circle.setMap(mapRef.current);
+    setCurrentCircle(circle);
+  };
+  // 검색 및 결과 처리
   const handleSend = async () => {
     if (!inputText.trim()) return;
-    const userMessage = { id: Date.now(), text: inputText, isUser: true };
-    setMessages(prev => [...prev, userMessage]);
+    setMessages(prev => [...prev, { id: Date.now(), text: inputText, isUser: true }]);
     const currentInput = inputText;
-
-    console.log("검색어:", currentInput);
-    console.log("전체 지역 데이터:", regionData.map(r => r.시군구명));
-    
     setInputText("");
 
     // regionData에 있는 모든 지역명 중, 현재 입력값에 포함된 첫 번째 지역을 찾음
@@ -95,9 +123,15 @@ export default function App() {
 
     if (found) {
       setPlaceName(found.시군구명);
-
       // benefitData에서 해당 지역 혜택 가져오기
       const benefits = benefitData[found.시군구명]; 
+
+      if (benefits && benefits.length > 0) {
+        setCurrentBenefits(benefits);
+        setViewMode('info');
+      } else {
+        setViewMode('calculator');
+      }
         
       // 혜택 멘트 생성 (있으면 리스트 출력, 없으면 기본 메시지)
       let benefitText = benefits 
@@ -110,14 +144,15 @@ export default function App() {
       try {
         const res = await fetch(url);
         const data = await res.json();
+        const item = data.response?.body?.items?.item[0];
         
-        const body = data.response?.body;
-        if (body && body.totalCount > 0) {
-          const rawItems = body.items.item;
-          const items = Array.isArray(rawItems) ? rawItems : [rawItems];
-          const item = items[0];
+        if (item) {
+          const lat = parseFloat(item.mapy);
+          const lng = parseFloat(item.mapx);
+
+          moveMapTo(lat, lng); // 기존 지도 이동
+          displayAreaInfo(benefits || [], lat, lng); // 핑 5개 찍고 영역 표시
           
-          moveMapTo(parseFloat(item.mapy), parseFloat(item.mapx));
           setMessages(prev => [...prev, { id: Date.now(), text: `🤖 '${found.시군구명}'의 대표 관광지 '${item.title}'로 이동합니다. 이곳은 관광주민증 혜택이 적용되는 지역입니다.`, isUser: false }]);
         } else {
           setMessages(prev => [...prev, { id: Date.now(), text: `🤖 '${found.시군구명}' 지역에 등록된 관광지 정보가 없습니다.`, isUser: false }]);
@@ -168,19 +203,40 @@ export default function App() {
       <div style={styles.leftSection}>
         <div ref={mapContainerRef} style={styles.mapArea}></div>
         <div style={styles.dashboardArea}>
-          <h3 style={{ margin: '0 0 10px 0', color: '#0f172a' }}>💳 디지털 관광주민증 실시간 가상 혜택 계산기</h3>
-          <p style={{ margin: '0 0 10px 0', fontSize: '14px', color: '#64748b' }}>현재 선택 구역: <strong>{placeName}</strong> (기본 {discountRate}% 할인 상권)</p>
-          <div style={styles.calcGrid}>
-            <div style={styles.calcCard}>
-              <label style={{ fontSize: '12px', color: '#64748b', display: 'block', marginBottom: '5px' }}>예상 이용 금액 입력 (원)</label>
-              <input type="number" value={price} onChange={(e) => setPrice(Number(e.target.value))} style={{ width: '100%', padding: '8px', boxSizing: 'border-box', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '16px', fontWeight: 'bold' }} />
+        {viewMode === 'calculator' ? (
+          // 기존 계산기 UI
+          <>
+            <h3 style={{ margin: '0 0 10px 0', color: '#0f172a' }}>💳 디지털 관광주민증 실시간 가상 혜택 계산기</h3>
+            <p style={{ margin: '0 0 10px 0', fontSize: '14px', color: '#64748b' }}>현재 선택 구역: <strong>{placeName}</strong></p>
+            <div style={styles.calcGrid}>
+              <div style={styles.calcCard}>
+                <label style={{ fontSize: '12px', color: '#64748b', display: 'block', marginBottom: '5px' }}>예상 이용 금액 (원)</label>
+                <input type="number" value={price} onChange={(e) => setPrice(Number(e.target.value))} style={{ width: '100%', padding: '8px', boxSizing: 'border-box', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '16px', fontWeight: 'bold' }} />
+              </div>
+              <div style={styles.calcCard}>
+                <div style={{ fontSize: '13px', marginBottom: '4px' }}>주민증 할인액: <span style={{ color: '#ef4444', fontWeight: 'bold' }}>-{discountedAmount.toLocaleString()}원</span></div>
+                <div style={{ fontSize: '16px', fontWeight: 'bold', borderTop: '1px dashed #cbd5e1', paddingTop: '8px', marginTop: '4px' }}>최종 결제액: <span style={{ color: '#0284c7' }}>{finalPrice.toLocaleString()}원</span></div>
+              </div>
             </div>
-            <div style={styles.calcCard}>
-              <div style={{ fontSize: '13px', marginBottom: '4px' }}>주민증 할인액: <span style={{ color: '#ef4444', fontWeight: 'bold' }}>-{discountedAmount.toLocaleString()}원</span></div>
-              <div style={{ fontSize: '16px', fontWeight: 'bold', borderTop: '1px dashed #cbd5e1', paddingTop: '8px', marginTop: '4px' }}>최종 결제액: <span style={{ color: '#0284c7' }}>{finalPrice.toLocaleString()}원</span></div>
-            </div>
+          </>
+        ) : (
+          // 혜택 정보 UI
+          <div style={{ overflowY: 'auto', height: '100%' }}>
+            <h3 style={{ color: '#0f172a' }}>{placeName} 주요 혜택 업체</h3>
+            {currentBenefits.map((b, i) => (
+              <div key={i} style={{ marginBottom: '10px', fontSize: '14px' }}>
+                <strong>{b.업체명}</strong>: {b.혜택}
+              </div>
+            ))}
+            <button 
+              onClick={() => setViewMode('calculator')} 
+              style={{ marginTop: '10px', padding: '8px 16px', cursor: 'pointer' }}
+            >
+              다시 계산기로
+            </button>
           </div>
-        </div>
+        )}
+      </div>
       </div>
       <div style={styles.rightSection}>
         <div style={styles.chatLog}>{messages.map(msg => <div key={msg.id} style={styles.bubble(msg.isUser)}>{msg.text}</div>)}</div>
